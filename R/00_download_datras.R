@@ -34,7 +34,7 @@ url <- paste0(
 
 ices <- st_read(url)
 
-# Save as shapefile
+# save as shapefile
 st_write(
   ices, here("data/metadata/ices_areas/ICES_Statrec_mapto_ICES_Areas.shp"),
   delete_layer = TRUE
