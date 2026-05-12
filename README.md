@@ -78,7 +78,7 @@ Areas are resolved through the full ICES hierarchy (e.g. `27.4.b` falls back to 
 
 ## Maturity scales
 
-DATRAS surveys use several incompatible maturity coding schemes. The pipeline detects the scheme in use for each country × survey × year and converts to binary:
+DATRAS surveys use several incompatible maturity coding schemes. The pipeline detects the scheme in use for each country × survey × year and converts to binary. Note that "Roman" and "Numeric" are not distinct biological maturity scales — they refer to how stages are encoded in DATRAS (Roman numerals vs. integers), and may correspond to different underlying scales depending on the survey.
 
 | Scale | Immature | Mature | Excluded |
 |-------|----------|--------|----------|

@@ -3,5 +3,6 @@
 /.claude
 /data/intermediate
 /data/raw
-/data/metadata
+/data/metadata/go_fish_spawning
+/data/metadata/ices_area
 .DS_Store
