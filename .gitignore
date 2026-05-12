@@ -1,5 +1,7 @@
 /.DS_Store
 /.Rproj.user
 /.claude
-/data
+/data/intermediate
+/data/raw
+/data/metadata
 .DS_Store
