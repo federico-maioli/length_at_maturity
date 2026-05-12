@@ -1,8 +1,16 @@
 /.DS_Store
 /.Rproj.user
 /.claude
-/data/intermediate
-/data/raw
-/data/metadata/go_fish_spawning
-/data/metadata/ices_area
 .DS_Store
+
+# ignore contents but preserve folders via .gitkeep
+/data/intermediate/*
+!/data/intermediate/.gitkeep
+/data/raw/*
+!/data/raw/.gitkeep
+/data/metadata/go_fish_spawning/*
+!/data/metadata/go_fish_spawning/.gitkeep
+/data/metadata/ices_areas/*
+!/data/metadata/ices_areas/.gitkeep
+/data/final/*
+!/data/final/.gitkeep
