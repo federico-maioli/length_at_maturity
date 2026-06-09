@@ -12,33 +12,40 @@ target_species <- l50_clean |>
   pull(species_clean) |>
   str_replace_all("_", " ")
 
-# 2. build species x month matrix ----
+# L50 species with no spawning period anywhere in spawn_lookup (any source / area)
+species_missing_spawn <- setdiff(target_species, unique(spawn_lookup$species))
 
-# keep only direct sources (gofish, wkmat, gofish+wkmat)
+# 2. build species x month matrix, per ICES region ----
+
+# keep data resolved at the area or region level; drop neighbour-borrowed and basin-wide
 spawn_long <- spawn_lookup |>
   filter(
-    source %in% c("gofish", "wkmat", "gofish+wkmat"),
+    match_type %in% c("exact_area", "exact_area_subareas",
+                      "parent_area", "parent_area_subareas", "region"),
     species %in% target_species,
     lengths(spawn_months) > 0
   ) |>
-  select(species, ices_area, spawn_months) |>
+  # ICES region = leading integer of the area code (e.g. 4.a -> 4)
+  mutate(region = as.integer(sub("\\..*", "", ices_area))) |>
+  select(species, region, ices_area, spawn_months) |>
   unnest_longer(spawn_months, values_to = "month")
 
-# total distinct ICES areas per species (denominator for proportion)
-species_n_areas <- spawn_long |>
-  group_by(species) |>
-  summarise(n_areas = n_distinct(ices_area), .groups = "drop")
+# distinct ICES sub-areas per species x region (denominator for proportion)
+species_region_n_areas <- spawn_long |>
+  distinct(species, region, ices_area) |>
+  count(species, region, name = "n_areas")
 
-# proportion of ICES areas where each species spawns in each month
+# proportion of sub-areas within each region where a species spawns in each month
 spawn_summary <- spawn_long |>
-  group_by(species, month) |>
+  group_by(species, region, month) |>
   summarise(n_spawn = n_distinct(ices_area), .groups = "drop") |>
-  complete(species, month = 1:12, fill = list(n_spawn = 0L)) |>
-  left_join(species_n_areas, by = "species") |>
+  complete(nesting(species, region), month = 1:12, fill = list(n_spawn = 0L)) |>
+  left_join(species_region_n_areas, by = c("species", "region")) |>
   mutate(
     prop = n_spawn / n_areas,
     species = fct_rev(factor(species)),   # alphabetical, A at top
-    month = factor(month, levels = 1:12, labels = month.abb)
+    month = factor(month, levels = 1:12, labels = month.abb),
+    region = factor(region, labels = paste("ICES area", sort(unique(region))))
   )
 
 # 3. plot ----
@@ -48,12 +55,13 @@ purple_pal <- c("white", "#BCBDDC", "#756BB1", "#54278F")
 
 ggplot(spawn_summary, aes(x = month, y = species, fill = prop)) +
   geom_tile(color = "grey92", linewidth = 0.25) +
+  facet_grid(rows = vars(region), scales = "free_y", space = "free_y") +
   scale_fill_gradientn(
     colors = purple_pal,
     values = c(0, 0.01, 0.5, 1),   # white only at exactly 0
     limits = c(0, 1),
     breaks = c(0, 0.25, 0.5, 0.75, 1),
-    name = "Proportion of \nICES areas"
+    name = "Proportion of \nsub-areas"
   ) +
   scale_x_discrete(expand = c(0, 0), position = "top") +
   scale_y_discrete(expand = c(0, 0)) +
@@ -63,6 +71,8 @@ ggplot(spawn_summary, aes(x = month, y = species, fill = prop)) +
     axis.text.y = element_text(size = 9, face = "italic", hjust = 1),
     axis.text.x = element_text(size = 10),
     panel.grid = element_blank(),
+    panel.spacing = unit(0.4, "lines"),
+    strip.text.y = element_text(angle = 0, face = "bold", size = 9),
     legend.key.height = unit(0.9, "cm"),
     legend.key.width = unit(0.3, "cm"),
     legend.title = element_text(size = 9),
@@ -72,10 +82,13 @@ ggplot(spawn_summary, aes(x = month, y = species, fill = prop)) +
 
 # 4. save ----
 
+# height scales with the total number of species x region rows across all facets
+n_rows <- spawn_summary |> distinct(species, region) |> nrow()
+
 ggsave(
   here("outputs/supp/spawning_heatmap.png"),
   width = 18,
-  height = 15,
+  height = max(15, 1 + 0.35 * n_rows),
   units = "cm",
   dpi = 450,
   limitsize = FALSE
