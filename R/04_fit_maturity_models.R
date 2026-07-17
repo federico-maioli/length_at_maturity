@@ -3,9 +3,7 @@ library(here)
 library(pROC)
 library(performance)
 
-set.seed(2)
-
-# 1. load data ----
+# 01 Load data ----
 
 data <- readRDS(here("data/intermediate/maturity_clean.rds")) |>
   dplyr::select(
@@ -15,12 +13,12 @@ data <- readRDS(here("data/intermediate/maturity_clean.rds")) |>
   ) |>
   mutate(period = paste0((year %/% 5) * 5, "-", (year %/% 5) * 5 + 4))
 
-# 2. prepare nested datasets ----
+# 02 Prepare nested datasets ----
 
 # each block nests data by grouping scope (global / stock / area) and sex split;
 # minimum 15 immature and 15 mature required in every group
 
-## global ----
+# global ----
 data_global_comb <- data |>
   group_by(species_clean) |>
   filter(sum(mature == 0) >= 15, sum(mature == 1) >= 15) |>
@@ -38,7 +36,7 @@ data_global_sex <- data |>
   nest() |>
   mutate(model = "Global")
 
-## stock ----
+# stock ----
 data_stock_comb <- data |>
   filter(str_detect(species_stock, "\\.27\\.")) |>
   group_by(species_clean, species_stock) |>
@@ -57,7 +55,7 @@ data_stock_sex <- data |>
   nest() |>
   mutate(model = "Stock")
 
-## area ----
+# area ----
 data_area_comb <- data |>
   group_by(species_clean, ices_area) |>
   filter(sum(mature == 0) >= 15, sum(mature == 1) >= 15) |>
@@ -75,7 +73,7 @@ data_area_sex <- data |>
   nest() |>
   mutate(model = "Area")
 
-## period ----
+# period ----
 data_global_comb_period <- data |>
   filter(period != "2025-2029") |>
   group_by(species_clean, period) |>
@@ -131,39 +129,38 @@ data_area_sex_period <- data |>
   nest() |>
   mutate(model = "Area")
 
-# 3. model fitting functions ----
+# 03 Model fitting functions ----
 
-# invert the logistic link to get length at probability p
+# invert the logistic link to get the length at probability p
 length_at_probability <- function(cf, p = 0.5) {
   (qlogis(p) - cf[1]) / cf[2]
+}
+
+# delta-method standard error of the length at probability p, following the same
+# formula as MASS::dose.p (gradient of x_p wrt the coefficients, times the vcov matrix)
+se_length_at_probability <- function(mod, p = 0.5) {
+  b   <- coef(mod)
+  x_p <- length_at_probability(b, p)
+  grad <- -c(1, x_p) / b[2]
+  sqrt(as.numeric(t(grad) %*% vcov(mod) %*% grad))
 }
 
 # all-NA result row used when a group cannot be modelled
 .na_lp_result <- function(p, est = NA_real_) {
   tibble::tibble(
-    label   = paste0("l", round(p * 100)),
-    est     = est,
-    se      = NA_real_,
-    lower   = NA_real_,
-    upper   = NA_real_,
-    auc     = NA_real_,
+    label = paste0("l", round(p * 100)),
+    est = est,
+    se = NA_real_,
+    lower = NA_real_,
+    upper = NA_real_,
+    auc = NA_real_,
     tjur_r2 = NA_real_
   )
 }
 
-# fit a binomial GLM on a bootstrap resample; returns coefficients or NA pair
-.boot_one <- function(sub_df) {
-  idx <- sample.int(nrow(sub_df), replace = TRUE)
-  fit <- tryCatch(
-    suppressWarnings(glm(mature ~ lngt_cm, data = sub_df[idx, ], family = binomial)),
-    error = function(e) NULL
-  )
-  if (is.null(fit) || !isTRUE(fit$converged)) return(c(NA_real_, NA_real_))
-  unname(coef(fit))
-}
-
-# fit model on full data, bootstrap CIs around L25/L50/L75 (or any p)
-get_lp_ci <- function(sub_df, p = c(0.25, 0.5, 0.75), n_boot = 100) {
+# fit a binomial GLM on the full data; return L25/L50/L75 with delta-method SEs and
+# normal (symmetric) confidence intervals, plus model-fit metrics
+get_lp_ci <- function(sub_df, p = c(0.25, 0.5, 0.75)) {
 
   if (length(unique(sub_df$mature)) < 2 ||
       sum(sub_df$mature == 0, na.rm = TRUE) < 15 ||
@@ -177,68 +174,56 @@ get_lp_ci <- function(sub_df, p = c(0.25, 0.5, 0.75), n_boot = 100) {
   )
   if (is.null(mod) || !isTRUE(mod$converged)) return(.na_lp_result(p))
 
-  cf <- coef(mod)
+  b <- coef(mod)
 
   # model fit metrics
   pred        <- predict(mod, type = "response")
   auc_val     <- as.numeric(pROC::auc(pROC::roc(sub_df$mature, pred, quiet = TRUE)))
   tjur_r2_val <- as.numeric(performance::r2_tjur(mod))
 
-  # resample rows, refit, collect coefficients (2 x n_boot matrix)
-  boot_coefs <- replicate(n_boot, .boot_one(sub_df))
+  z <- qnorm(0.975)
 
   purrr::map_dfr(p, function(prob) {
-    label  <- paste0("l", round(prob * 100))
-    lp_est <- length_at_probability(cf, prob)
-
-    bLp <- apply(boot_coefs, 2, function(b) {
-      if (anyNA(b) || !is.finite(b[1]) || !is.finite(b[2]) || abs(b[2]) < 1e-6)
-        return(NA_real_)
-      length_at_probability(b, prob)
-    })
-    bLp <- bLp[is.finite(bLp)]
-
-    if (length(bLp) < 10) {
-      return(tibble::tibble(label = label, est = lp_est,
-                            se = NA_real_, lower = NA_real_, upper = NA_real_,
-                            auc = auc_val, tjur_r2 = tjur_r2_val))
-    }
-
-    ci <- quantile(bLp, c(0.025, 0.975), na.rm = TRUE)
+    est <- length_at_probability(b, prob)
+    se <- se_length_at_probability(mod, prob)
     tibble::tibble(
-      label   = label,
-      est     = lp_est,
-      se      = sd(bLp),
-      lower   = unname(ci[1]),
-      upper   = unname(ci[2]),
-      auc     = auc_val,
+      label = paste0("l", round(prob * 100)),
+      est = unname(est),
+      se = se,
+      lower = unname(est - z * se),
+      upper = unname(est + z * se),
+      auc = auc_val,
       tjur_r2 = tjur_r2_val
     )
   })
 }
 
-# 4. fit all models ----
+# 04 Fit all models ----
 
 maturity_data <- bind_rows(
-  data_global_comb        |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global combined"))        |> unnest(res, keep_empty = TRUE),
-  data_global_sex         |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global by sex"))          |> unnest(res, keep_empty = TRUE),
-  data_stock_comb         |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock combined"))         |> unnest(res, keep_empty = TRUE),
-  data_stock_sex          |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock by sex"))           |> unnest(res, keep_empty = TRUE),
-  data_area_comb          |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area combined"))          |> unnest(res, keep_empty = TRUE),
-  data_area_sex           |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area by sex"))            |> unnest(res, keep_empty = TRUE),
+  data_global_comb |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global combined")) |> unnest(res, keep_empty = TRUE),
+  data_global_sex |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global by sex")) |> unnest(res, keep_empty = TRUE),
+  data_stock_comb |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock combined")) |> unnest(res, keep_empty = TRUE),
+  data_stock_sex |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock by sex")) |> unnest(res, keep_empty = TRUE),
+  data_area_comb |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area combined")) |> unnest(res, keep_empty = TRUE),
+  data_area_sex |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area by sex")) |> unnest(res, keep_empty = TRUE),
   data_global_comb_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global combined period")) |> unnest(res, keep_empty = TRUE),
-  data_global_sex_period  |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global by sex period"))   |> unnest(res, keep_empty = TRUE),
-  data_stock_comb_period  |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock combined period"))  |> unnest(res, keep_empty = TRUE),
-  data_stock_sex_period   |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock by sex period"))    |> unnest(res, keep_empty = TRUE),
-  data_area_comb_period   |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area combined period"))   |> unnest(res, keep_empty = TRUE),
-  data_area_sex_period    |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area by sex period"))     |> unnest(res, keep_empty = TRUE)
+  data_global_sex_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Global by sex period")) |> unnest(res, keep_empty = TRUE),
+  data_stock_comb_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock combined period")) |> unnest(res, keep_empty = TRUE),
+  data_stock_sex_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Stock by sex period")) |> unnest(res, keep_empty = TRUE),
+  data_area_comb_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area combined period")) |> unnest(res, keep_empty = TRUE),
+  data_area_sex_period |> mutate(res = map(data, ~ get_lp_ci(.x), .progress = "Area by sex period")) |> unnest(res, keep_empty = TRUE)
 ) |>
   tidyr::pivot_wider(
-    names_from  = label,
+    names_from = label,
     values_from = c(est, se, lower, upper),
-    names_glue  = "{label}_{.value}"
-  )
+    names_glue = "{label}_{.value}"
+  ) |>
+  # keep the per-group sample size, then drop the nested raw data (which otherwise
+  # bloats the saved object to tens of GB, duplicated across every nesting scope)
+  mutate(n = map_int(data, nrow)) |>
+  select(-data)
 
-# 5. save ----
+# 05 Save ----
 
 write_rds(maturity_data, here("data/intermediate/l50_raw.rds"))

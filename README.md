@@ -25,7 +25,7 @@ length_at_maturity/
 │   ├── 00_download_datras.R       # download all DATRAS surveys + ICES shapefiles
 │   ├── 01_get_species_info.R      # fetch species metadata from FishBase / WoRMS
 │   ├── 02_create_spawning_data.R  # build spawning-season lookup (GO-FISH + WKMAT07)
-│   ├── 03_clean_maturity.R        # decode maturity scales, spatial join, season filter
+│   ├── 03_assign_maturity.R        # decode maturity scales, spatial join, season filter
 │   ├── 04_fit_maturity_models.R   # fit logistic GLMs, bootstrap L25/L50/L75
 │   ├── 05_clean_estimates.R       # quality-filter estimates, export CSV
 │   ├── 06_plot_l50.R              # main figures (dot plot, stock map, time series, ogive)
@@ -58,7 +58,7 @@ Each script is numbered and intended to be run in order. Scripts read from and w
 | 0 | `00_download_datras.R` | — | `data/raw/raw_datras.rds` |
 | 1 | `01_get_species_info.R` | raw DATRAS | `data/metadata/species_info.rds` |
 | 2 | `02_create_spawning_data.R` | species info, GO-FISH, WKMAT07 | `data/metadata/spawning_lookup.rds` |
-| 3 | `03_clean_maturity.R` | raw DATRAS, spawning lookup | `data/intermediate/maturity_clean.rds` |
+| 3 | `03_assign_maturity.R` | raw DATRAS, spawning lookup | `data/intermediate/maturity_clean.rds` |
 | 4 | `04_fit_maturity_models.R` | cleaned maturity data | `data/intermediate/l50_raw.rds` |
 | 5 | `05_clean_estimates.R` | raw L50 estimates | `data/final/l50_estimates.csv` |
 | 6–7 | `06_plot_l50.R`, `07_map.R` | final estimates | figures in `outputs/` |
