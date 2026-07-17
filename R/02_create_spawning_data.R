@@ -1,15 +1,13 @@
-
-library(sf)
-library(purrr)
 library(tidyverse)
 library(here)
+library(sf)
 library(DATRASextra)
 library(readxl)
 library(rfishbase)
 
 sf_use_s2(FALSE)
 
-# 1. species present in datras ca ----
+# 01 Species present in datras ca ----
 
 raw_data <- readRDS(here("data/raw/raw_datras.rds")) |>
   DATRASextra::correct_species()
@@ -29,16 +27,16 @@ dataset_species <- raw_data[["CA"]] |>
   distinct(species_clean) |>
   pull(species_clean)
 
-# 2. ices statistical areas ----
+# 02 Ices statistical areas ----
 
 ices_sf <- read_sf(
-  here("data/metadata/ices_areas/StatRec_map_Areas_Full_20170124.shp")
+  here("data/metadata/ices_areas/ICES_Statrec_mapto_ICES_Areas.shp")
 ) |>
   group_by(Area_27) |>
   summarise(geometry = st_union(geometry), .groups = "drop")
 
-# 3. species x ices area combinations in the dataset ----
-# pre-compute the exact combinations that appear after the spatial join in 03_clean_maturity.R
+# 03 Species x ices area combinations in the dataset ----
+# pre-compute the exact combinations that appear after the spatial join in 03_assign_maturity.R
 
 hh_sf <- raw_data[["HH"]] |>
   as_tibble() |>
@@ -65,7 +63,7 @@ species_area_combos <- ca_haul_species |>
   inner_join(hh_ices, by = "haul.id") |>
   distinct(species, ices_area)
 
-# 4. go-fish: spawning months per species x ices area ----
+# 04 Go-fish spawning months per species x ices area ----
 
 gofish_raw <- read_sf(here("data/metadata/go_fish_spawning/GO-FISH-hs.shp")) |>
   filter(species %in% dataset_species)
@@ -84,12 +82,12 @@ spawn_gofish <- st_intersection(gofish_months,
   group_by(species, ices_area) |>
   summarise(
     spawn_months = list(sort(unique(unlist(spawn_months)))),
-    .groups      = "drop"
+    .groups = "drop"
   ) |>
   mutate(spawn_months = map(spawn_months, as.integer),
-         source       = "gofish")
+         source = "gofish")
 
-# 5. wkmat07: spawning months per species x ices area ----
+# 05 Wkmat07 spawning months per species x ices area ----
 
 wkmat07_raw <- read_excel(here("data/metadata/spawning_season_wkmat07.xlsx"))
 
@@ -101,7 +99,7 @@ spawn_wkmat <- wkmat07_raw |>
   select(Scientific_name, Area, spawn_months) |>
   separate_rows(Area, sep = ",") |>
   mutate(
-    Area     = trimws(Area),
+    Area = trimws(Area),
     n_months = lengths(spawn_months)
   ) |>
   # keep narrower spawning window when a species x area pair appears more than once
@@ -112,11 +110,11 @@ spawn_wkmat <- wkmat07_raw |>
   rename(species = Scientific_name, ices_area = Area) |>
   mutate(
     spawn_months = map(spawn_months, as.integer),
-    source       = "wkmat"
+    source = "wkmat"
   ) |>
   filter(species %in% dataset_species)
 
-# 5b. fishbase: spawning months mapped to ICES regions ----
+# 06 Fishbase spawning months mapped to ices regions ----
 # FishBase has obviously no ICES key! Spawningarea and SpawningGround are free text. Two tiers:
 #  - specific seas (North Sea, Baltic, Bay of Biscay, ...) map to ONE ICES region
 #    (source "fishbase").
@@ -168,8 +166,8 @@ fb_records <- tryCatch(
   rfishbase::spawning(species_list = dataset_species) |>
     as_tibble() |>
     mutate(
-      loc    = coalesce(Spawningarea, SpawningGround),
-      low    = str_to_lower(coalesce(loc, "")),
+      loc = coalesce(Spawningarea, SpawningGround),
+      low = str_to_lower(coalesce(loc, "")),
       region = map_dbl(loc, classify_region),
       across(all_of(month_cols), ~ as.integer(!is.na(.) & . != 0))
     ) |>
@@ -201,7 +199,7 @@ spawn_fishbase_generic <- fb_records |>
   mutate(source = "fishbase_basin") |>
   select(species, spawn_months, source)
 
-# 6. merge sources ----
+# 07 Merge sources ----
 
 # merge a vector of (possibly already compound) source labels into a single string of
 # unique, sorted atomic tokens, e.g. c("gofish", "gofish+wkmat") -> "gofish+wkmat"
@@ -215,11 +213,11 @@ spawn_direct <- bind_rows(spawn_gofish, spawn_wkmat) |>
   summarise(
     spawn_months = list(sort(unique(unlist(spawn_months)))),
     # contributing sources, e.g. "gofish", "wkmat", or "gofish+wkmat"
-    source       = combine_sources(source),
-    .groups      = "drop"
+    source = combine_sources(source),
+    .groups = "drop"
   )
 
-# 7. propagate months to all ancestor ices areas ----
+# 08 Propagate months to all ancestor ices areas ----
 
 get_area_parents <- function(area) {
   parts <- strsplit(area, "\\.")[[1]]
@@ -234,8 +232,8 @@ spawn_all <- spawn_direct |>
   group_by(species, ices_area = ancestors) |>
   summarise(
     spawn_months = list(sort(unique(unlist(spawn_months)))),
-    source       = combine_sources(source),
-    .groups      = "drop"
+    source = combine_sources(source),
+    .groups = "drop"
   )
 
 # region-level fallback using the leading integer of the ICES code
@@ -263,8 +261,8 @@ spawn_region_good <- bind_rows(spawn_region_survey, spawn_fishbase_keep) |>
   group_by(species, region) |>
   summarise(
     spawn_months = list(sort(unique(unlist(spawn_months)))),
-    source       = combine_sources(source),
-    .groups      = "drop"
+    source = combine_sources(source),
+    .groups = "drop"
   )
 
 # generic FishBase basin window: broadcast to every dataset region, kept only where no
@@ -278,11 +276,11 @@ spawn_region_basin <- spawn_fishbase_generic |>
   group_by(species, region) |>
   summarise(
     spawn_months = list(sort(unique(unlist(spawn_months)))),
-    source       = combine_sources(source),
-    .groups      = "drop"
+    source = combine_sources(source),
+    .groups = "drop"
   )
 
-# 8. resolver ----
+# 09 Resolver ----
 
 # search from most specific to least specific area
 get_area_hierarchy <- function(area) {
@@ -317,9 +315,9 @@ resolve_spawn <- function(sp, area, spawn_direct, spawn_all,
 
     return(list(
       spawn_months = hit_all$spawn_months[[1]],
-      source       = if (has_direct) hit_direct$source[1] else hit_all$source[1],
-      match_type   = match_type,
-      source_area  = a
+      source = if (has_direct) hit_direct$source[1] else hit_all$source[1],
+      match_type = match_type,
+      source_area = a
     ))
   }
 
@@ -339,9 +337,9 @@ resolve_spawn <- function(sp, area, spawn_direct, spawn_all,
   if (nrow(good_hit) == 1)
     return(list(
       spawn_months = good_hit$spawn_months[[1]],
-      source       = good_hit$source[1],
-      match_type   = if (good_hit$dist == 0) "region" else "neighbour_region",
-      source_area  = as.character(good_hit$region[1])
+      source = good_hit$source[1],
+      match_type = if (good_hit$dist == 0) "region" else "neighbour_region",
+      source_area = as.character(good_hit$region[1])
     ))
 
   # 3. final fallback: basin-scale FishBase window for the target region
@@ -350,45 +348,45 @@ resolve_spawn <- function(sp, area, spawn_direct, spawn_all,
   if (nrow(basin_hit) == 1)
     return(list(
       spawn_months = basin_hit$spawn_months[[1]],
-      source       = basin_hit$source[1],
-      match_type   = "basin",
-      source_area  = as.character(basin_hit$region[1])
+      source = basin_hit$source[1],
+      match_type = "basin",
+      source_area = as.character(basin_hit$region[1])
     ))
 
   no_match
 }
 
-# 9. build the lookup ----
+# 10 Build the lookup ----
 
 spawn_lookup <- species_area_combos |>
   mutate(
     resolved = map2(
       species, ices_area,
       resolve_spawn,
-      spawn_direct       = spawn_direct,
-      spawn_all          = spawn_all,
-      spawn_region_good  = spawn_region_good,
+      spawn_direct = spawn_direct,
+      spawn_all = spawn_all,
+      spawn_region_good = spawn_region_good,
       spawn_region_basin = spawn_region_basin
     ),
     spawn_months = map(resolved, "spawn_months"),
-    source       = map_chr(resolved, ~ .x$source      %||% NA_character_),
-    match_type   = map_chr(resolved, ~ .x$match_type  %||% NA_character_),
-    source_area  = map_chr(resolved, ~ .x$source_area %||% NA_character_)
+    source = map_chr(resolved, ~ .x$source %||% NA_character_),
+    match_type = map_chr(resolved, ~ .x$match_type %||% NA_character_),
+    source_area = map_chr(resolved, ~ .x$source_area %||% NA_character_)
   ) |>
   select(-resolved) |>
   # keep only combinations for which spawning months were resolved
   filter(lengths(spawn_months) > 0)
 
-# 10. manual additions ----
+# 11 Manual additions ----
 # species missing from all automated sources, filled in by hand. Each entry is applied to
 # every ICES area where the species occurs in the survey (species_area_combos).
 
 manual_spawn <- tibble(
-  species      = "Chelidonichthys lucerna",
+  species = "Chelidonichthys lucerna",
   spawn_months = list(c(1L, 2L)),
-  source       = "fishbase",
-  match_type   = "basin",
-  source_area  = "Mediterranean"
+  source = "fishbase",
+  match_type = "basin",
+  source_area = "Mediterranean"
 ) |>
   inner_join(distinct(species_area_combos, species, ices_area), by = "species") |>
   # do not overwrite anything already resolved for that species x area
@@ -397,7 +395,7 @@ manual_spawn <- tibble(
 
 spawn_lookup <- bind_rows(spawn_lookup, manual_spawn)
 
-# 11. extend spawning months by 3-month pre-spawn window ----
+# 12 Extend spawning months by 3-month pre-spawn window ----
 # for each spawning month, include the three calendar months immediately before it
 # (wraps across the year boundary)
 
@@ -410,7 +408,7 @@ add_pre_spawn <- function(months) {
 spawn_lookup <- spawn_lookup |>
   mutate(spawn_months_ext = map(spawn_months, add_pre_spawn))
 
-# 12. summary ----
+# 13 Summary ----
 
 # how many species x area combinations were resolved at each level of the hierarchy
 match_type_levels <- c("exact_area", "exact_area_subareas",
@@ -422,18 +420,6 @@ source_summary <- spawn_lookup |>
   count(match_type, source, name = "n_entries") |>
   arrange(match_type, desc(n_entries))
 
-# 13. species with no spawning information ----
-# a species "has information" if at least one of its species x area combos
-# resolved to a non-empty set of spawning months (source not NA)
-
-species_with_info <- spawn_lookup |>
-  filter(!is.na(source), lengths(spawn_months) > 0) |>
-  distinct(species) |>
-  pull(species)
-
-# species we care about (dataset_species) that never resolved any spawning months
-species_no_info <- setdiff(dataset_species, species_with_info)
-
-# 14. save ----
+# 14 Save ----
 
 write_rds(spawn_lookup, here("data/metadata/spawning_lookup.rds"))

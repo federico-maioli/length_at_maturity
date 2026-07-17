@@ -1,5 +1,5 @@
-library(here)
 library(tidyverse)
+library(here)
 library(rnaturalearth)
 library(ggrepel)
 library(paletteer)
@@ -9,19 +9,18 @@ library(patchwork)
 library(ggstats)
 library(geomtextpath)
 
-# 1. load data ----
+# 01 Load data ----
 
 raw <- read_rds(here("data/final/l50_clean.rds")) |>
   rename(l50 = l50_est, l25 = l25_est, l75 = l75_est)
-data_raw <- read_rds(here("data/intermediate/l50_raw.rds")) |>
-  rename(l50 = l50_est, l25 = l25_est, l75 = l75_est)
+data_raw <- read_rds(here("data/intermediate/maturity_clean.rds"))
 
 # shared colour palette
 col_mid <- "#756BB1"
 col_dark <- "#3F007D"
 col_light <- "#BCBDDC"
 
-# 2. panel a: l50 by stock ----
+# 02 Panel a: l50 by stock ----
 
 coeff <- raw |>
   filter(model == "Stock", sex == "Combined", is.na(period)) |>
@@ -54,6 +53,7 @@ pA <- ggplot(coeff, aes(x = l50, y = label)) +
   ) +
   geom_point(color = col_mid, fill = "white", shape = 21, size = 1.4, stroke = 0.8) +
   scale_y_discrete(labels = function(x) parse(text = x)) +
+  scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
   labs(x = expression(L[50]~"(cm)"), y = NULL) +
   theme_light(base_size = 12) +
   theme(
@@ -64,9 +64,9 @@ pA <- ggplot(coeff, aes(x = l50, y = label)) +
     panel.grid.minor.x = element_blank()
   )
 
-# 3. spatial setup ----
+# 03 Spatial setup ----
 
-ices_sf <- read_sf(here("data/metadata/ices_areas/StatRec_map_Areas_Full_20170124.shp"))
+ices_sf <- read_sf(here("data/metadata/ices_areas/ICES_Statrec_mapto_ICES_Areas.shp"))
 coast <- ne_countries(scale = "medium", returnclass = "sf")
 
 # pre-computed lookup of species x ICES area from the cleaned maturity data
@@ -74,7 +74,7 @@ area_lookup <- readRDS(here("data/intermediate/maturity_clean.rds")) |>
   dplyr::select(species, ices_area, species_stock) |>
   distinct()
 
-# 4. panel b: cod stock map ----
+# 04 Panel b: cod stock map ----
 
 cod_sf <- coeff |>
   select(-ices_area) |>
@@ -133,7 +133,7 @@ p_cod <- ggplot() +
     legend.text = element_text(size = 7)
   )
 
-# 5. panel c: cod.27.21 time series ----
+# 05 Panel c: cod.27.21 time series ----
 
 period_levels <- c("2000-2004", "2005-2009", "2010-2014", "2015-2019", "2020-2024")
 
@@ -158,38 +158,45 @@ pC <- ggplot(cod_ts, aes(x = period, y = l50, group = 1)) +
     plot.title = element_text(size = 12, hjust = 0.5, face = "bold")
   )
 
-# 6. panel d: maturity ogive by sex for cod.27.21 ----
+# 06 Panel d: maturity ogive by sex for cod.27.21 ----
 
 sex_colors <- c("F" = col_dark, "M" = col_light)
 
-# reconstruct fitted logistic curves from L25/L50 point estimates
-cod21_fits <- data_raw |>
-  filter(grepl("cod.27.21", species_stock), sex %in% c("M", "F"), is.na(period)) |>
-  select(sex, l50, l25) |>
-  group_by(sex) |>
-  group_modify(~ {
-    b1 <- qlogis(0.25) / (.x$l25 - .x$l50)
-    b0 <- -b1 * .x$l50
-    tibble(lngt_cm = seq(10, 100, length.out = 300),
-           p = plogis(b0 + b1 * seq(10, 100, length.out = 300)))
-  }) |>
-  ungroup()
+# length grid for the fitted curves (starts at 0 so the ogive spans the full axis)
+x_seq <- seq(0, 100, length.out = 300)
+
+# raw individual observations for the cod.27.21 stock, by sex
+cod21_obs <- data_raw |>
+  filter(grepl("cod.27.21", species_stock), sex %in% c("M", "F"),
+         !is.na(mature), !is.na(lngt_cm))
+
+# refit the logistic maturity model per sex on the raw observations
+cod21_models <- cod21_obs |>
+  nest(data = -sex) |>
+  mutate(fit = map(data, ~ glm(mature ~ lngt_cm, data = .x, family = binomial)))
+
+# predicted ogive per sex over the length grid
+cod21_fits <- cod21_models |>
+  mutate(pred = map(fit, ~ tibble(
+    lngt_cm = x_seq,
+    p = predict(.x, tibble(lngt_cm = x_seq), type = "response")
+  ))) |>
+  select(sex, pred) |>
+  unnest(pred)
+
+# L50 per sex from the refitted models (for the dashed reference lines)
+l50_lines <- cod21_models |>
+  mutate(l50 = map_dbl(fit, ~ -coef(.x)[1] / coef(.x)[2])) |>
+  select(sex, l50) |>
+  mutate(label = sprintf("%.1f", l50))
 
 # bin raw observations to overlay proportions as points
-cod21_binned <- data_raw |>
-  filter(grepl("cod.27.21", species_stock), sex %in% c("M", "F"), is.na(period)) |>
+cod21_binned <- cod21_obs |>
   rename(model_sex = sex) |>
-  select(-ices_area, -period) |>
-  unnest(data) |>
   mutate(lngt_bin = floor(lngt_cm / 3) * 3 + 1.5) |>
   group_by(model_sex, lngt_bin) |>
   summarise(n = n(), prop = mean(mature, na.rm = TRUE), .groups = "drop") |>
   filter(n >= 5)
-
-l50_lines <- data_raw |>
-  filter(grepl("cod.27.21", species_stock), sex %in% c("M", "F"), is.na(period)) |>
-  select(sex, l50) |>
-  mutate(label = sprintf("%.1f", l50))
 
 pD <- ggplot() +
   geom_line(data = cod21_fits,
@@ -204,6 +211,7 @@ pD <- ggplot() +
   scale_color_manual(values = sex_colors,
                      labels = c("F" = "Female", "M" = "Male"), name = NULL) +
   scale_size_continuous(range = c(0.8, 3.5), guide = "none") +
+  scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
   scale_y_continuous(limits = c(0, 1)) +
   labs(x = "Total length (cm)", y = "Proportion mature", title = "cod.27.21") +
   theme_light(base_size = 12) +
@@ -218,7 +226,7 @@ pD <- ggplot() +
     plot.title = element_text(size = 12, hjust = 0.5, face = "bold")
   )
 
-# 7. combine and save ----
+# 07 Combine and save ----
 
 pA + (p_cod / pC / pD + plot_layout(heights = c(2, 0.8, 2))) +
   plot_annotation(tag_levels = "A") +

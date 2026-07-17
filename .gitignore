@@ -2,6 +2,8 @@
 /.Rproj.user
 /.claude
 .DS_Store
+.Rhistory
+.Rapp.history
 
 # ignore contents but preserve folders via .gitkeep
 /data/intermediate/*
