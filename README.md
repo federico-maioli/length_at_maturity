@@ -9,10 +9,28 @@ Estimates of length at maturity (L50, L25, L75) for Northeast Atlantic fish and 
 Maturity status is recorded during bottom-trawl surveys but the data are rarely used at scale to produce comparable L50 estimates across species and regions. This repository builds a reproducible pipeline that:
 
 1. Downloads and harmonises raw maturity observations from DATRAS across all available surveys
-2. Assigns each observation to its ICES statistical area and filters to the spawning / pre-spawning period using two independent sources (GO-FISH and WKMAT07)
+2. Assigns each observation to its ICES statistical area and filters to the spawning / pre-spawning period using GO-FISH and WKMAT07, with FishBase spawning months as a fallback
 3. Decodes heterogeneous maturity scales (SMSF, Roman, numeric, R1/R2, M6, I/M) into a common binary mature/immature variable
-4. Fits logistic regression models with delta-method confidence intervals to estimate L25, L50 and L75 at global, stock, area, and 5-year period levels
+4. Fits logistic regression models with delta-method confidence intervals to estimate L25, L50 and L75 at global, stock, area, and 5-year period levels, for combined sexes and for females and males separately
 5. Quality-filters the estimates, reports per-model fit (AUC, Tjur R²), checks them against FishBase, and exports a tidy CSV for archiving
+
+---
+
+## Getting started
+
+Clone the repository and open the project:
+
+```bash
+git clone https://github.com/federico-maioli/length_at_maturity.git
+cd length_at_maturity
+```
+
+Open `length_at_maturity.Rproj` in RStudio (or set the working directory to the project root), then set up the package environment with [`renv`](https://rstudio.github.io/renv/):
+
+- **First-time setup** — run `R/00_set_renv.R`. It installs `renv`, builds a project-local library with all dependencies (CRAN + `tokami/DATRASextra`), and writes a `renv.lock` file.
+- **Reproducing an existing setup** — if `renv.lock` is already present, run `renv::restore()` to install the exact recorded package versions.
+
+Then run the pipeline scripts in `R/` in numerical order (`00_download.R` → `10_plot_fishbase.R`); each reads from and writes to `data/` via `here::here()`. Note that `00_download.R` fetches the full DATRAS database and takes a while. The Baltic stage-II sensitivity analysis in `tests/bits_sensitivity.R` is optional.
 
 ---
 
@@ -22,6 +40,7 @@ Maturity status is recorded during bottom-trawl surveys but the data are rarely 
 length_at_maturity/
 │
 ├── R/
+│   ├── 00_set_renv.R              # set up reproducible package library (renv)
 │   ├── 00_download.R              # download DATRAS surveys, ICES shapefile, GO-FISH
 │   ├── 01_get_species_info.R      # fetch species metadata from FishBase / WoRMS
 │   ├── 02_create_spawning_data.R  # build spawning-season lookup (GO-FISH + WKMAT07)
@@ -74,8 +93,9 @@ To ensure observations reflect reproductive condition, each record is matched to
 
 - **GO-FISH** — spatially explicit monthly spawning habitat maps
 - **WKMAT07** — ICES expert-elicited spawning seasons by area
+- **FishBase** — reported spawning months, mapped to ICES regions and used as a fallback where the survey-based sources have no information
 
-Areas are resolved through the full ICES hierarchy (e.g. `27.4.b` falls back to `27.4`, then `27`). The active window is extended by 3 months before the first spawning month to capture pre-spawning fish. Records with no spawning information are retained rather than dropped.
+Areas are resolved through the full ICES hierarchy (e.g. `27.4.b` falls back to `27.4`, then `27`), and region-level FishBase windows are used only where no finer information exists. The active window is extended by 3 months before the first spawning month to capture pre-spawning fish. Records with no spawning information are retained rather than dropped.
 
 ---
 
@@ -89,16 +109,16 @@ For the Baltic surveys, the ambiguous Roman stage II is dropped by default, with
 
 ## Models
 
-A binomial GLM (`mature ~ lngt_cm`, logit link) is fitted for each species × grouping combination. L25, L50 and L75 are derived analytically from the coefficients, with delta-method standard errors and symmetric 95% confidence intervals. Model fit is reported via AUC and Tjur R².
+A binomial GLM (`mature ~ lngt_cm`, logit link) is fitted for each species × spatial level × sex combination. L25, L50 and L75 are derived analytically from the coefficients, with delta-method standard errors and symmetric 95% confidence intervals. Model fit is reported via AUC and Tjur R².
 
-Grouping levels:
+Spatial / temporal levels:
 
 - **Global** — all areas and years combined
 - **Stock** — ICES stock unit (`.27.` notation)
 - **Area** — individual ICES statistical area
 - **Period** — 5-year bins (2000–2004, …, 2020–2024)
 
-Each level is run for combined sexes and male/female separately where sample sizes allow (≥ 15 immature and ≥ 15 mature).
+Each level is fitted for **combined sexes** and for **females** and **males** separately, wherever sample sizes allow (≥ 15 immature and ≥ 15 mature in the group).
 
 ---
 
@@ -106,7 +126,7 @@ Each level is run for combined sexes and male/female separately where sample siz
 
 ```r
 # CRAN
-tidyverse, here, sf, janitor, jsonlite, rfishbase, worrms, taxize, readxl,
+renv, tidyverse, here, sf, janitor, jsonlite, rfishbase, worrms, taxize, readxl,
 pROC, performance, knitr, kableExtra, rnaturalearth, patchwork, ggrepel,
 paletteer, geomtextpath, ggstats, DiagrammeR, DiagrammeRsvg, rsvg
 
