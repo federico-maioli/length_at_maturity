@@ -33,8 +33,6 @@ renv::restore()
 
 `renv` and `renv.lock` are already in the repository, so this is the only setup step needed — it installs everything into a project-local library without touching your system packages. Then run the pipeline scripts in `R/` in numerical order (`00_download.R` → `10_plot_fishbase.R`); each reads from and writes to `data/` via `here::here()`. Note that `00_download.R` fetches the full DATRAS database and takes a while. The Baltic stage-II sensitivity analysis in `tests/bits_sensitivity.R` is optional.
 
-(Maintainers can regenerate the lockfile after changing dependencies with `R/00_set_renv.R`.)
-
 ---
 
 ## Repository structure
@@ -43,7 +41,6 @@ renv::restore()
 length_at_maturity/
 │
 ├── R/
-│   ├── 00_set_renv.R              # set up reproducible package library (renv)
 │   ├── 00_download.R              # download DATRAS surveys, ICES shapefile, GO-FISH
 │   ├── 01_get_species_info.R      # fetch species metadata from FishBase / WoRMS
 │   ├── 02_create_spawning_data.R  # build spawning-season lookup (GO-FISH + WKMAT07)

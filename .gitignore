@@ -5,6 +5,9 @@
 .Rhistory
 .Rapp.history
 
+# local maintainer helper, not part of the distributed pipeline
+/R/00_set_renv.R
+
 # ignore contents but preserve folders via .gitkeep
 /data/intermediate/*
 !/data/intermediate/.gitkeep
