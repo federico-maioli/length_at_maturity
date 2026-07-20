@@ -25,12 +25,15 @@ git clone https://github.com/federico-maioli/length_at_maturity.git
 cd length_at_maturity
 ```
 
-Open `length_at_maturity.Rproj` in RStudio (or set the working directory to the project root), then set up the package environment with [`renv`](https://rstudio.github.io/renv/):
+Open `length_at_maturity.Rproj` in RStudio (or set the working directory to the project root). The project uses [`renv`](https://rstudio.github.io/renv/) with a pinned `renv.lock`, so install the exact package versions used to build the dataset with:
 
-- **First-time setup** — run `R/00_set_renv.R`. It installs `renv`, builds a project-local library with all dependencies (CRAN + `tokami/DATRASextra`), and writes a `renv.lock` file.
-- **Reproducing an existing setup** — if `renv.lock` is already present, run `renv::restore()` to install the exact recorded package versions.
+```r
+renv::restore()
+```
 
-Then run the pipeline scripts in `R/` in numerical order (`00_download.R` → `10_plot_fishbase.R`); each reads from and writes to `data/` via `here::here()`. Note that `00_download.R` fetches the full DATRAS database and takes a while. The Baltic stage-II sensitivity analysis in `tests/bits_sensitivity.R` is optional.
+`renv` and `renv.lock` are already in the repository, so this is the only setup step needed — it installs everything into a project-local library without touching your system packages. Then run the pipeline scripts in `R/` in numerical order (`00_download.R` → `10_plot_fishbase.R`); each reads from and writes to `data/` via `here::here()`. Note that `00_download.R` fetches the full DATRAS database and takes a while. The Baltic stage-II sensitivity analysis in `tests/bits_sensitivity.R` is optional.
+
+(Maintainers can regenerate the lockfile after changing dependencies with `R/00_set_renv.R`.)
 
 ---
 
