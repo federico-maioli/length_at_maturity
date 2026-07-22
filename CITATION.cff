@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this dataset or code, please cite the associated Data Descriptor."
+title: "Length at maturity of Northeast Atlantic fish and elasmobranchs from ICES DATRAS surveys"
+abstract: >-
+  Length-at-maturity estimates (L25, L50, L75) for Northeast Atlantic teleost and
+  elasmobranch species, derived from the ICES DATRAS bottom-trawl survey database.
+  Estimates are provided at global, stock, area, and five-year-period levels, for
+  combined sexes and by sex, with confidence intervals and model-fit metrics.
+type: dataset
+version: v1.0.0
+date-released: "2026-07-20"
+license: CC-BY-4.0
+repository-code: "https://github.com/federico-maioli/length_at_maturity"
+keywords:
+  - length at maturity
+  - L50
+  - maturity ogive
+  - DATRAS
+  - ICES
+  - bottom-trawl survey
+  - fish
+  - elasmobranchs
+  - Northeast Atlantic
+  - fisheries
+authors:
+  - family-names: Maioli
+    given-names: Federico
+    email: fed.maioli@gmail.com
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+  # - family-names: <co-author surname>
+  #   given-names: <co-author name>
+  #   orcid: "https://orcid.org/..."
+# Once the Scientific Data article has a DOI, uncomment and complete:
+# preferred-citation:
+#   type: article
+#   title: "<article title>"
+#   journal: "Scientific Data"
+#   year: 2026
+#   doi: "10.xxxx/xxxxx"
+#   authors:
+#     - family-names: Maioli
+#       given-names: Federico

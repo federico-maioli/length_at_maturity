@@ -141,3 +141,13 @@ remotes::install_github("tokami/DATRASextra")
 `data/final/l50_estimates.csv` — one row per species × sex × spatial scale × time period, with columns:
 
 `aphia_id`, `species`, `sex`, `spatial_scale`, `ices_stock`, `ices_area`, `time_period`, `sample_size`, `l25_cm`, `l25_se_cm`, `l25_ci_lower_cm`, `l25_ci_upper_cm`, `l50_cm`, `l50_se_cm`, `l50_ci_lower_cm`, `l50_ci_upper_cm`, `l75_cm`, `l75_se_cm`, `l75_ci_lower_cm`, `l75_ci_upper_cm`, `model_auc`, `model_tjur_r2`
+
+---
+
+## License
+
+Code in this repository is released under the MIT License (see `LICENSE`). The dataset (`data/final/l50_estimates.csv`), archived on Zenodo, is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## Citation
+
+If you use this dataset or code, please cite the associated Data Descriptor (see `CITATION.cff`).
