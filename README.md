@@ -1,6 +1,7 @@
 # Length at Maturity — DATRAS
 
 Estimates of length at maturity (L50, L25, L75) for Northeast Atlantic fish and elasmobranch species, derived from the ICES DATRAS trawl survey database. Models are fitted at multiple spatial and temporal scales, quality-filtered, and checked against FishBase reference values.
+Data and code archived at [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22145221.svg)](https://doi.org/10.5281/zenodo.22145221)
 
 ---
 
