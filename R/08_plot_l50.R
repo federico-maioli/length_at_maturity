@@ -133,14 +133,14 @@ p_cod <- ggplot() +
     legend.text = element_text(size = 7)
   )
 
-# 05 Panel c: cod.27.21 time series ----
+# 05 Panel c: cod.27.46a7d20 time series ----
 
 period_levels <- c("2000-2004", "2005-2009", "2010-2014", "2015-2019", "2020-2024")
 
 cod_ts <- raw |>
   filter(species_clean == "Gadus_morhua", model == "Stock",
          sex == "Combined", !is.na(period),
-         grepl("cod.27.21", species_stock)) |>
+         grepl("cod.27.46a7d20", species_stock)) |>
   mutate(period = factor(period, levels = period_levels)) |>
   filter(!is.na(period))
 
@@ -149,7 +149,7 @@ pC <- ggplot(cod_ts, aes(x = period, y = l50, group = 1)) +
               fill = col_mid, alpha = 0.2, color = NA) +
   geom_line(color = col_mid, linewidth = 0.6) +
   geom_point(color = col_mid, size = 1.6, shape = 21, fill = "white", stroke = 0.8) +
-  labs(x = NULL, y = expression(L[50]~"(cm)"), title = "cod.27.21") +
+  labs(x = NULL, y = expression(L[50]~"(cm)"), title = "cod.27.46a7d20") +
   theme_light(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
@@ -158,16 +158,16 @@ pC <- ggplot(cod_ts, aes(x = period, y = l50, group = 1)) +
     plot.title = element_text(size = 12, hjust = 0.5, face = "bold")
   )
 
-# 06 Panel d: maturity ogive by sex for cod.27.21 ----
+# 06 Panel d: maturity ogive by sex for cod.27.46a7d20 ----
 
 sex_colors <- c("F" = col_dark, "M" = col_light)
 
 # length grid for the fitted curves (starts at 0 so the ogive spans the full axis)
 x_seq <- seq(0, 100, length.out = 300)
 
-# raw individual observations for the cod.27.21 stock, by sex
+# raw individual observations for the cod.27.46a7d20 stock, by sex
 cod21_obs <- data_raw |>
-  filter(grepl("cod.27.21", species_stock), sex %in% c("M", "F"),
+  filter(grepl("cod.27.46a7d20", species_stock), sex %in% c("M", "F"),
          !is.na(mature), !is.na(lngt_cm))
 
 # refit the logistic maturity model per sex on the raw observations
@@ -213,7 +213,7 @@ pD <- ggplot() +
   scale_size_continuous(range = c(0.8, 3.5), guide = "none") +
   scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
   scale_y_continuous(limits = c(0, 1)) +
-  labs(x = "Total length (cm)", y = "Proportion mature", title = "cod.27.21") +
+  labs(x = "Total length (cm)", y = "Proportion mature", title = "cod.27.46a7d20") +
   theme_light(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
